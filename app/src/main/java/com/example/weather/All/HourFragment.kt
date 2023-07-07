@@ -41,7 +41,12 @@ class HourFragment : Fragment() {
         rcView.layoutManager=LinearLayoutManager(activity, LinearLayoutManager.HORIZONTAL, false)
         adapter = WeatherAdapter()
         rcView.adapter=adapter
-
+rcView.post( Runnable() {
+    @Override
+    fun run() {
+        rcView.smoothScrollToPosition(adapter.getItemCount() - 1);
+    }
+})
     }
     private fun getHoursList(wItem: Day): List<Day>{
         val hoursArray = JSONArray(wItem.hours)

@@ -6,16 +6,17 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.LocationManager
+import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import com.android.volley.Request
@@ -23,6 +24,7 @@ import com.android.volley.toolbox.StringRequest
 import com.android.volley.toolbox.Volley
 import com.example.weather.Day
 import com.example.weather.DialogManager
+import com.example.weather.DialogManager2
 import com.example.weather.MainModel
 import com.example.weather.R
 import com.example.weather.databinding.FragmentMainBinding
@@ -33,13 +35,12 @@ import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
 import com.squareup.picasso.Picasso
 import org.json.JSONObject
-import java.net.URL
 import java.util.Locale
 
 object GlobalVariable {
-  var cityRu: String =""
+  var cityRu: String ="Москва"
 }
-class Main : Fragment() {
+class Main (): Fragment() {
 
     private lateinit var binding: FragmentMainBinding
     private lateinit var pLauncher: ActivityResultLauncher<String>
@@ -48,19 +49,39 @@ class Main : Fragment() {
     //private  lateinit var cityRu: String
     //private lateinit var  swipeRefreshLayout: SwipeRefreshLayout
     override fun onCreate(savedInstanceState: Bundle?) {
+
         super.onCreate(savedInstanceState)
+        //requestWeatherData("Moscow")
+      //  updateCurrentCard()
+      // checkPermission()
+        fLocationClient = LocationServices.getFusedLocationProviderClient(requireContext())
+        if(isLocationEnabled()) {
+            getLocation()
+            getLocationRU()
+        }
+        //updateCurrentCard()
+       // updateCurrentCard()
 
     }
     private  fun refresh()= with(binding){
         swipe?.setOnRefreshListener {
+
             fLocationClient = LocationServices.getFusedLocationProviderClient(requireContext())
+
             getLocation()
-           updateCurrentCard()
+            getLocationRU()
+            updateCurrentCard()
+            updateCurrentCard()
+            getLocation()
+            getLocationRU()
+            updateCurrentCard()
+            updateCurrentCard()
             swipe?.isRefreshing=false
         }
 
-
     }
+
+
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
@@ -72,25 +93,46 @@ class Main : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        checkPermission()
-       init()
+        if(!isPermissionGranted(Manifest.permission.ACCESS_FINE_LOCATION)) {
+            permissionListener()
+            pLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+        init()
+      //  checkPermission()
         if(Locale.getDefault().getDisplayLanguage()=="русский")
         {
-            getLocationRU()
-            Log.d("MyLog2", "namecity: ${GlobalVariable.cityRu}")
-            updateCurrentCard()
-            Log.d("MyLog3", "namecity: ${GlobalVariable.cityRu}")
-            updateCurrentCard()
+            if(!isLocationEnabled()){
+                requestWeatherData("Moscow")
+                updateCurrentCard()
+            }
+            else {
+                checkPermission()
+                fLocationClient = LocationServices.getFusedLocationProviderClient(requireContext())
+                getLocation()
+                getLocationRU()
+                updateCurrentCard()
+                updateCurrentCard()
+                fLocationClient = LocationServices.getFusedLocationProviderClient(requireContext())
+                getLocation()
+                getLocationRU()
+                updateCurrentCard()
+                updateCurrentCard()
+            }
+
         }
-        else updateCurrentCard()
-       // Log.d("MyLog1", "Time: ${Locale.getDefault().getDisplayLanguage()}")
-      //  getLocationRU()
+else{
+            checkPermission()
+            updateCurrentCard()
+
+}
+
         refresh()
     }
 
     override fun onResume() {
         super.onResume()
         checkLocation()
+
     }
 
     private fun init() = with(binding){
@@ -131,13 +173,16 @@ class Main : Fragment() {
             ) != PackageManager.PERMISSION_GRANTED
         ) {
             return
+            permissionListener()
+          //  checkPermission()
         }
         fLocationClient
             .getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, ct.token)
             .addOnCompleteListener{
                 Log.d("MyLog1", "Time: ${it.result.latitude}")
-                requestWeatherData("${it.result.latitude},${it.result.longitude}")
                 requestCity("${it.result.latitude}","${it.result.longitude}")
+                requestWeatherData("${it.result.latitude},${it.result.longitude}")
+
             }
     }
     private fun getLocationRU(){
@@ -163,10 +208,11 @@ class Main : Fragment() {
     @SuppressLint("ResourceType")
     private fun updateCurrentCard()= with(binding){
     model.liveDataCurrent.observe(viewLifecycleOwner){
-        Log.d("MyLog6", "namecity: ${GlobalVariable.cityRu}")
+
        val MaxMinTemp = "${it.minTemp}°C/${it.maxTemp}°C"
-        if(Locale.getDefault().getDisplayLanguage()=="русский") {
+            if(Locale.getDefault().getDisplayLanguage()=="русский") {
             location?.text = GlobalVariable.cityRu
+                Log.d("MyLog6", "namecity: ${GlobalVariable.cityRu}")
         }
         else location?.text  =it.city
         data?.text =it.time
@@ -181,20 +227,45 @@ Picasso.get().load("https:"+it.img).into(imageView2)
     private fun permissionListener(){
         pLauncher = registerForActivityResult(
             ActivityResultContracts.RequestPermission()){
-           // Toast.makeText(activity, "Permission is $it", Toast.LENGTH_LONG).show()
+            // Toast.makeText(activity, "Permission is $it", Toast.LENGTH_LONG).show()
             if (it==false){
-                requestWeatherData("Moscow")
-                updateCurrentCard()
+                DialogManager2.locationSettingsDialog(requireContext(), object : DialogManager2.Listener{
+                    override fun onClick(i: Int) {
+                        if (i==1)
+                        {
+                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                            intent.data = Uri.parse("package:" + Application2.applicationContext().packageName)
+                            startActivity(intent)
+                        }
+
+                        else
+                        {
+                           // pLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                            requestWeatherData("Moscow")
+                            updateCurrentCard()
+                        }
+                    }
+                })
             }
         }
     }
 
     private fun checkPermission(){
-        if(!isPermissionGranted(Manifest.permission.ACCESS_FINE_LOCATION)){
-            permissionListener()
-            pLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        when {
+            isPermissionGranted(Manifest.permission.ACCESS_FINE_LOCATION)
+                ->{}
+            shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION)
+            ->{
+
+            }
+                else ->{
+
+                    pLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                }
+            }
         }
-    }
+
+
 
     private fun requestCity(l: String, lt: String){
         val url = "https://api.openweathermap.org/data/2.5/weather?lat=$l&lon=$lt&appid=4c273337bfa872f4e7706321555cf689&lang=ru"
@@ -212,7 +283,7 @@ Picasso.get().load("https:"+it.img).into(imageView2)
         val name =  mainObject.getString("name")       //  cityRu=name
         Log.d("MyLog", "namecity: $name")
         GlobalVariable.cityRu=name
-        Log.d("MyLog6", "namecity: ${GlobalVariable.cityRu}")
+        Log.d("MyLog3", "namecity: ${GlobalVariable.cityRu}")
     }
 
             private fun requestWeatherData(city: String){
@@ -285,9 +356,9 @@ Picasso.get().load("https:"+it.img).into(imageView2)
         Log.d("MyLog", "Time: ${item.minTemp}")
         Log.d("MyLog", "Time: ${item.hours}")
     }
-    companion object {
+    /*companion object {
         @JvmStatic
-        fun newInstance() = Main()
+       fun newInstance() = Main().onSaveInstanceState(Bundle())
 
-    }
+    }*/
 }
